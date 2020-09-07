@@ -1,7 +1,6 @@
 #Ethan Moore
 #Pitch Quality Model, Second Iteration
 
-
 library(tidyverse)
 require(caTools)
 library(baseballr)
@@ -463,8 +462,8 @@ rmse(fbs_predictions$preds, fbs_predictions$lin_weight)
 #FB Leaderboard for sanity
 fbs_predictions%>%
   group_by(player_name)%>%
-  summarise(n=n(), qop = -100*sum(preds,na.rm=T)/n)%>%
-  filter(n>300)%>%
+  summarise(pitches=n(), qop = -100*sum(preds,na.rm=T)/pitches)%>%
+  filter(pitches>300)%>%
   arrange(desc(qop))%>%
   print(n=25)
 
@@ -496,7 +495,7 @@ new_os_nested <- os_data%>% #og_data_shuffled[1:round(nrow(os_data_shuffled)*.3)
 
 #same operations as earlier but now in a pipe
 os_predictions <- os_nested %>% 
-  mutate(my_model = map(myorigdata, rf_model_eno))%>% #chose the model, eno did better
+  mutate(my_model = map(myorigdata, rf_model_os))%>% 
   full_join(new_os_nested, by = c("p_throws", "stand", "grouped_pitch_type"))%>%
   mutate(my_new_pred = map2(my_model, mytotaldata, predict))%>%
   select(p_throws,stand,grouped_pitch_type, mytotaldata, my_new_pred)%>%
@@ -530,9 +529,10 @@ rmse(predictions$preds, predictions$lin_weight) #Final RMSE
 
 #overall leaderboard for sanity
 predictions%>%
+  #filter(grouped_pitch_type == "CH")%>%
   group_by(player_name)%>%
   summarise(n=n(), qop = -100*sum(preds,na.rm=T)/n)%>%
-  filter(n>500)%>%
+  filter(n>100)%>%
   arrange(desc(qop))%>%
   print(n=50)
 

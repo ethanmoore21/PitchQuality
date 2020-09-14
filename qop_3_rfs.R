@@ -9,6 +9,7 @@ library(psych)
 library(lubridate)
 library(zoo)
 library(randomForest)
+library(Boruta)
 
 ###Data acquisition from BaseballSavant.com
 

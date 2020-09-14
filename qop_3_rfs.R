@@ -30,12 +30,16 @@ data4 = scrape_statcast_savant(start_date = "2020-08-20",
                                player_type = "pitcher")
 
 data5 = scrape_statcast_savant(start_date = "2020-08-29",
-                               end_date = "2020-09-05",
+                               end_date = "2020-09-08",
                                player_type = "pitcher")
 
-mlbraw = rbind(data1, data2, data3, data4, data5)
+data6 = scrape_statcast_savant(start_date = "2020-09-09",
+                               end_date = "2020-09-12",
+                               player_type = "pitcher")
 
-rm(data1, data2, data3, data4, data5)
+mlbraw = rbind(data1, data2, data3, data4, data5, data6)
+
+rm(data1, data2, data3, data4, data5, data6)
 
 ###Data cleaning and feature creation
 
@@ -203,7 +207,6 @@ mlb_re3$count_RE_diff = mlb_re3$count_RE_after - mlb_re3$count_RE
 
 mlb_re3$count_playRE = mlb_re3$count_RE_diff + mlb_re3$runs_scored
 
-
 BALL_STRIKE_LW = mlb_re3%>%
   filter(des2 %in% c("ball", "strike"))%>%
   group_by(des2)%>%
@@ -213,9 +216,20 @@ BALL_STRIKE_LW = mlb_re3%>%
 mlb_LW = rbind(mlb_LW, BALL_STRIKE_LW)
 
 season_mlb = left_join(mlb2, mlb_LW[,1:2], by = "des2")
+
+#give pitcher credit for only 1 out on situation-based outcomes
+season_mlb$lin_weight[season_mlb$des2 == "field_error"] = mlb_LW$lin_weight[mlb_LW$des2 == "field_out"]
+season_mlb$lin_weight[season_mlb$des2 == "double play"] = mlb_LW$lin_weight[mlb_LW$des2 == "field_out"]
+season_mlb$lin_weight[season_mlb$des2 == "fielder's choice"] = mlb_LW$lin_weight[mlb_LW$des2 == "field_out"]
+season_mlb$lin_weight[season_mlb$des2 == "force out"] = mlb_LW$lin_weight[mlb_LW$des2 == "field_out"]
+season_mlb$lin_weight[season_mlb$des2 == "sacrifice fly"] = mlb_LW$lin_weight[mlb_LW$des2 == "field_out"]
+
+season_mlb = season_mlb%>%
+  filter(!is.na(des2))
+
 head(season_mlb)
 
-rm(a,b,c,mlb_LW, mlb_re, mlb_re2, mlb_re3, mlb2, mlbraw, mlbraw2)
+rm(a,b,c,mlb_LW, mlb_re, mlb_re2, mlb_re3, mlb2, mlbraw, mlbraw2, BALL_STRIKE_LW)
 
 #Further cleaning
 
@@ -464,9 +478,9 @@ rmse(fbs_predictions$preds, fbs_predictions$lin_weight)
 fbs_predictions%>%
   group_by(player_name)%>%
   summarise(pitches=n(), qop = -100*sum(preds,na.rm=T)/pitches)%>%
-  filter(pitches>300)%>%
+  filter(pitches>287)%>%
   arrange(desc(qop))%>%
-  print(n=25)
+  print(n=Inf)
 
 
 #off speed model
@@ -511,11 +525,11 @@ rmse(os_predictions$preds, os_predictions$lin_weight)
 
 #Offspeed Leaderboard for sanity
 os_predictions%>%
+  #filter(grouped_pitch_type == "CB")%>%
   group_by(player_name, grouped_pitch_type)%>%
   summarise(n=n(), qop = -100*sum(preds,na.rm=T)/n)%>%
-  filter(n>100)%>%
-  arrange(desc(qop))%>%
-  print(n=25)
+  filter(n>50)%>%
+  arrange(desc(qop))
 
 
 #get all predictions together

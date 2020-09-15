@@ -34,7 +34,7 @@ data5 = scrape_statcast_savant(start_date = "2020-08-29",
                                player_type = "pitcher")
 
 data6 = scrape_statcast_savant(start_date = "2020-09-09",
-                               end_date = "2020-09-12",
+                               end_date = "2020-09-14",
                                player_type = "pitcher")
 
 mlbraw = rbind(data1, data2, data3, data4, data5, data6)
@@ -455,7 +455,7 @@ new_fb_nested <- fb_data%>% #[1:round(nrow(fb_data_shuffled)),]%>%
 #already exists from above
 # rf_model_fb <- function(df) {
 #   randomForest(lin_weight ~ release_speed + release_pos_x + release_pos_y+
-#                  release_pos_z + pfx_x + pfx_z,
+#                  release_pos_z + pfx_x + pfx_z + plate_x + plate_z + release_spin_rate,
 #                data = df)
 # }
 
@@ -478,7 +478,7 @@ rmse(fbs_predictions$preds, fbs_predictions$lin_weight)
 fbs_predictions%>%
   group_by(player_name)%>%
   summarise(pitches=n(), qop = -100*sum(preds,na.rm=T)/pitches)%>%
-  filter(pitches>287)%>%
+  filter(pitches>300)%>%
   arrange(desc(qop))%>%
   print(n=Inf)
 
@@ -557,7 +557,7 @@ predictions%>%
   summarise(pitches = length(na.omit(preds)), xRV = 100*sum(preds, na.rm=T)/pitches)%>%
   mutate(QOP_plus = as.numeric(rescale(-xRV, mean = 100, sd=10, df = F)))%>%
   select(player_name, pitches, QOP_plus)%>%
-  filter(pitches > 100)%>%
+  filter(pitches > 500)%>%
   arrange(desc(QOP_plus))%>%
   print(n=50)
 

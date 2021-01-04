@@ -14,6 +14,9 @@
 
 # Libraries --------------------------------------------------------------
 
+#timing!
+start <- proc.time()
+
 library(tidyverse)
 require(caTools)
 library(baseballr)
@@ -260,7 +263,6 @@ head(season_mlb)
 rm(a,b,c,mlb_LW, mlb_re, mlb_re2, mlb_re3, mlb2, mlbraw, mlbraw2, BALL_STRIKE_LW)
 
 #Creation of variables like velo_diff and movement diff based on a pitcher's average fastball.
-# These variables did not improve the model, so I will not use them, but here they are if you want to use them.
 
 p_avgs <- season_mlb%>%
   filter(pitch_type %in% c("FF", "SI"))%>%
@@ -285,6 +287,18 @@ season_mlb4 <- season_mlb3%>%
       pitch_type %in% c("SL", "CB", "FS", "KC", "CH", "FC"), 
       pfx_z - avg_vmov, NA)
   )
+
+#manual fix of this for some reason
+
+season_mlb4$velo_diff[is.na(season_mlb4$velo_diff)] = season_mlb4$release_speed[is.na(season_mlb4$velo_diff)] - 
+  season_mlb4$avg_velo[is.na(season_mlb4$velo_diff)]
+
+season_mlb4$hmov_diff[is.na(season_mlb4$hmov_diff)] = season_mlb4$pfx_x[is.na(season_mlb4$hmov_diff)] - 
+  season_mlb4$avg_hmov[is.na(season_mlb4$hmov_diff)]
+
+season_mlb4$vmov_diff[is.na(season_mlb4$vmov_diff)] = season_mlb4$pfx_z[is.na(season_mlb4$vmov_diff)] - 
+  season_mlb4$avg_vmov[is.na(season_mlb4$vmov_diff)]
+
 
 names(season_mlb4)
 
@@ -315,6 +329,35 @@ feature_selection <- function(pitch_data){
   #The Boruta feature selection algorithm takes a long time with all the data, so we have to
   #subset down a lot. I took a 25% random sample of RvR pitches from the dataframe that we passed in
   
+  if(unique(pitch_data$pitch_type %in% c("FF", "SI"))){ #feature selection for fastballs which does not include diff variables
+    rr_data = pitch_data%>%
+      filter(p_throws == "R",
+             stand =="R",
+             !is.na(release_spin_rate),
+             !is.na(release_extension)) 
+    
+    rr_data_sampled = rr_data[sample(nrow(rr_data), size = nrow(rr_data)*.25),]
+    
+    Boruta_PitchType <- Boruta(lin_weight ~ release_speed + release_pos_x_adj + release_extension+
+                                 release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate, #+ velo_diff + hmov_diff + vmov_diff,
+                               data = rr_data_sampled)
+    
+    #print(Boruta_PitchType)
+    #plot(Boruta_PitchType)
+    
+    feature_importance <- data.frame(attStats(Boruta_PitchType))
+    
+    feature_importance%>%
+      select(meanImp, decision)%>%
+      arrange(desc(meanImp)) 
+    
+    Features <- getSelectedAttributes(Boruta_PitchType, withTentative = F) #return the list of confirmed important variables for use in the model
+    
+    return(Features)
+    
+    
+  }else{
+  
   rr_data = pitch_data%>%
     filter(p_throws == "R",
            stand =="R",
@@ -324,7 +367,7 @@ feature_selection <- function(pitch_data){
   rr_data_sampled = rr_data[sample(nrow(rr_data), size = nrow(rr_data)*.25),]
   
   Boruta_PitchType <- Boruta(lin_weight ~ release_speed + release_pos_x_adj + release_extension+
-                               release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate, # + velo_diff + hmov_diff + vmov_diff, #Potential extra variables to consider 
+                               release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate + velo_diff + hmov_diff + vmov_diff, #using diff variables
                              data = rr_data_sampled)
   
   #print(Boruta_PitchType)
@@ -340,13 +383,8 @@ feature_selection <- function(pitch_data){
   
   return(Features)
   
-}
+}}
 
-#I like to time how long this next part takes, but you don't have to
-#The rest of the code takes an hour or two to run on average
-
-# #timing!
-# start <- proc.time()
 
 #Get the features for our models for each pitch type group using our function
 
@@ -575,13 +613,9 @@ rmse(total_preds$lin_weight, total_preds$preds)
 join_cols = needed_cols[needed_cols != "preds"]
 final_mlb <- left_join(season_mlb5, total_preds, by = join_cols) 
 
-#make sure we didn't accidentally mess up the join!
-nrow(final_mlb) == nrow(season_mlb5)
-
-
 # use these for timing your code if you wish
-# end <- proc.time()
-# end-start
+end <- proc.time()
+(end-start)/60/60
 
 
 #Analysis (Add your own!) ------------------------------------------------

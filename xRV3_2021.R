@@ -632,3 +632,24 @@ final_mlb%>%
   select(player_name, inning, strikes, balls, outs_when_up, game_date, preds, lin_weight, pitch_type, des2)%>%
   head(15)
 
+#Fully Searchable Table
+library(DT)
+
+table_this <- final_mlb%>%
+  #filter(pitch_type %in% c("CU", "KC"))%>%
+  group_by(player_name, pitch_type)%>%
+  summarise(pitches=n(), xRV = round(100*sum(preds,na.rm=T)/pitches,digits = 2),
+            RV = round(100*sum(lin_weight)/pitches, digits = 2))%>%
+  #filter(pitches>=150)%>%
+  arrange((xRV))
+
+
+datatable(table_this, class = 'cell-border stripe', filter = 'top', 
+          options = list(pageLength = 10, autoWidth = TRUE,
+                         columnDefs = list(list(className = 'dt-center', targets = 0:5))),
+          colnames = c("Pitcher" = "player_name",
+                       "Pitch Type" = "pitch_type",
+                       "Pitch Count" = "pitches")) %>% 
+  formatStyle('xRV', backgroundColor =  "lightblue")
+
+

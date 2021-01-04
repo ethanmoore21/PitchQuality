@@ -26,7 +26,7 @@ library(Boruta)
 
 
 
-# Data acquisition from BaseballSavant.com -------------------------------
+# Data Acquisition from BaseballSavant.com -------------------------------
 
 # baseballR function scrape_statcast_savant() only returns 40,000 pitches 
 # at a time, so we must break the 2020 season up into several date ranges 
@@ -396,14 +396,6 @@ rmse = function(m, o){ #function for our model evaluaiton metric
   sqrt(mean((m - o)^2))
 }
 
-
-
-
-
-# not copied
-
-
-
 rf_model <- function(df, features) { #our model function with dataframe and features as parameters
   
   features1 <- append(features, c("lin_weight"))
@@ -496,7 +488,7 @@ total_preds_val <- rbind(ff_w_preds_val[,needed_cols], si_w_preds_val[,needed_co
 rmse(total_preds_val$lin_weight, total_preds_val$preds)
 
 
-# Application to all data ------------------------------------------------
+# Application To All Data ------------------------------------------------
 
 
 application <- function(data, features){
@@ -639,7 +631,4 @@ final_mlb%>%
   arrange(desc(preds))%>%
   select(player_name, inning, strikes, balls, outs_when_up, game_date, preds, lin_weight, pitch_type, des2)%>%
   head(15)
-
-
-
 

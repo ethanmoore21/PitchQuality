@@ -26,8 +26,7 @@ library(lubridate)
 library(zoo)
 library(randomForest)
 library(Boruta)
-
-
+set.seed(1)
 
 # Data Acquisition from BaseballSavant.com -------------------------------
 
@@ -69,10 +68,22 @@ data8 = scrape_statcast_savant(start_date = "2020-09-23",
                                end_date = "2020-09-29",
                                player_type = "pitcher")
 
-mlbraw = rbind(data1, data2, data3, data4, data5, data6, data7, data8) #bind all dataframes into one
+mlbraw1 = rbind(data1, data2, data3, data4, data5, data6, data7, data8) #bind all dataframes into one
 
 
 rm(data1, data2, data3, data4, data5, data6, data7, data8) #remove individual dataframes
+
+
+#add in spin direction from Bill Petti: https://t.co/hS48QqHtaF?amp=1
+#we only have this column for the 2020 season, so skip this if you are using data outside of 2020 and 
+#remove release_spin_direction from feature list in feature_selection() function
+
+
+spin_direction_pbp <- read.csv("~/Career/MLB2020/spin_direction_pbp.csv")
+#names(spin_direction_pbp)[3] = "player_name"
+
+mlbraw <- mlbraw1%>%
+left_join(spin_direction_pbp,by=c("game_pk","batter","pitcher","pitch_number","inning"))
 
 
 # Data Cleaning and Feature Creation -------------------------------------
@@ -304,21 +315,22 @@ names(season_mlb4)
 
 rm(season_mlb, season_mlb3, des_subset)  #get rid of dataframes we don't need anymore
 
-#flip horizontal release position and horizontal movement measurements for LHP
+#flip horizontal release position, horizontal movement, and spin direction measurements for LHP
 #remove NA values, Random Forest does not like those!
 season_mlb5 <- season_mlb4%>%
   filter(!is.na(lin_weight),
          !is.na(p_throws),
          !is.na(stand),
          !is.na(release_spin_rate),
-         !is.na(release_extension))%>%
+         !is.na(release_extension),
+         !is.na(release_spin_direction))%>%
   mutate(release_pos_x_adj = ifelse(p_throws == "R", release_pos_x, -release_pos_x),
-         pfx_x_adj = ifelse(p_throws == "R", pfx_x, -pfx_x)) 
+         pfx_x_adj = ifelse(p_throws == "R", pfx_x, -pfx_x),
+         spin_dir_adj = ifelse(p_throws == "R", release_spin_direction, -release_spin_direction)) 
 
 
 rm(season_mlb4)
 
-set.seed(1)
 
 # Feature Selection for Each Pitch Type-----------------------------------
 
@@ -339,7 +351,7 @@ feature_selection <- function(pitch_data){
     rr_data_sampled = rr_data[sample(nrow(rr_data), size = nrow(rr_data)*.25),]
     
     Boruta_PitchType <- Boruta(lin_weight ~ release_speed + release_pos_x_adj + release_extension+
-                                 release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate, #+ velo_diff + hmov_diff + vmov_diff,
+                                 release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate + release_spin_direction, #+ velo_diff + hmov_diff + vmov_diff,
                                data = rr_data_sampled)
     
     #print(Boruta_PitchType)
@@ -367,7 +379,8 @@ feature_selection <- function(pitch_data){
   rr_data_sampled = rr_data[sample(nrow(rr_data), size = nrow(rr_data)*.25),]
   
   Boruta_PitchType <- Boruta(lin_weight ~ release_speed + release_pos_x_adj + release_extension+
-                               release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate + velo_diff + hmov_diff + vmov_diff, #using diff variables
+                               release_pos_z + pfx_x_adj + pfx_z + plate_x + plate_z + release_spin_rate + release_spin_direction +
+                               velo_diff + hmov_diff + vmov_diff, #using diff variables
                              data = rr_data_sampled)
   
   #print(Boruta_PitchType)
@@ -632,7 +645,7 @@ final_mlb%>%
 final_mlb%>%
   group_by(player_name)%>%
   summarise(n=n(), xRV = 100*sum(preds,na.rm=T)/n)%>%
-  filter(n>300)%>%
+  filter(n>1000)%>%
   arrange((xRV))%>%
   print(n=50)
 
@@ -670,20 +683,21 @@ final_mlb%>%
 library(DT)
 
 table_this <- final_mlb%>%
-  #filter(pitch_type %in% c("CU", "KC"))%>%
+  filter(pitch_type %in% c("SL"))%>%
   group_by(player_name, pitch_type)%>%
-  summarise(pitches=n(), xRV = round(100*sum(preds,na.rm=T)/pitches,digits = 2),
-            RV = round(100*sum(lin_weight)/pitches, digits = 2))%>%
-  #filter(pitches>=150)%>%
+  summarise(pitches=n(), RV = round(100*sum(lin_weight)/pitches, digits = 2),
+            xRV = round(100*sum(preds,na.rm=T)/pitches,digits = 2))%>%
+  ungroup()%>%
+  mutate(xRV_plus = round(as.numeric(rescale(-xRV, mean = 100, sd=10, df = F)),0))%>%  
+  filter(pitches>=150)%>%
   arrange((xRV))
 
 
 datatable(table_this, class = 'cell-border stripe', filter = 'top', 
           options = list(pageLength = 10, autoWidth = TRUE,
-                         columnDefs = list(list(className = 'dt-center', targets = 0:5))),
+                         columnDefs = list(list(className = 'dt-center', targets = 0:6))),
           colnames = c("Pitcher" = "player_name",
                        "Pitch Type" = "pitch_type",
                        "Pitch Count" = "pitches")) %>% 
   formatStyle('xRV', backgroundColor =  "lightblue")
-
 
